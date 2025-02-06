@@ -23,6 +23,11 @@ def print_psycopg_error(e):
 
 ## ------------------------------------------------------------
 def connect_db():
+    """
+    Connects to the database and returns the connection
+    :return: Connection to the database
+    """
+    
     try:
         conn = psycopg2.connect(
             host = "localhost",
@@ -39,6 +44,12 @@ def connect_db():
 
 ## ------------------------------------------------------------
 def disconnect_db(conn):
+    """
+    Terminates a connection
+    :param conn: Connection to the database
+    :return: None
+    """
+    
     conn.commit()
     conn.close()
 
@@ -52,12 +63,12 @@ def create_table_article(conn):
     """
     
     statement = """
-                CREATE TABLE article (
-                    code INT CONSTRAINT code_pkey PRIMARY KEY,
-                    name VARCHAR(30) NOT NULL,
-                    price NUMERIC(5, 2) CONSTRAINT price_non_negative check (price > 0)
-                )
-                """
+        CREATE TABLE article (
+            code INT CONSTRAINT code_pkey PRIMARY KEY,
+            name VARCHAR(30) NOT NULL,
+            price NUMERIC(5, 2) CONSTRAINT price_non_negative check (price > 0)
+        )
+    """
         
     with conn.cursor() as cur:
         try:
@@ -68,7 +79,7 @@ def create_table_article(conn):
             if e.pgcode == psycopg2.errorcodes.DUPLICATE_TABLE:
                 print("Error: table 'article' already exists")
             else:
-                print(f"Unknown error: {e.pgcode}: {e.pgerror}")
+                print(f"Error: {e.pgcode}: {e.pgerror}")
             conn.rollback()
 
 
@@ -81,8 +92,8 @@ def delete_table_article(conn):
     """
     
     statement = """
-                DROP TABLE article
-                """
+        DROP TABLE article
+    """
         
     with conn.cursor() as cur:
         try:
@@ -93,7 +104,7 @@ def delete_table_article(conn):
             if e.pgcode == psycopg2.errorcodes.UNDEFINED_TABLE:
                 print("Error: table 'article' does not exist")
             else:
-                print(f"Undefined error: {e.pgcode}: {e.pgerror}")
+                print(f"Error: {e.pgcode}: {e.pgerror}")
             conn.rollback()
             
 
@@ -114,9 +125,9 @@ def insert_article(conn):
     price = None if price == "".strip() else float(price)
         
     statement = """
-                INSERT INTO article(code, name, price) 
-                values(%s, %s, %s)
-                """
+        INSERT INTO article(code, name, price) 
+        values(%s, %s, %s)
+    """
     parameters = (code, name, price)
     
     with conn.cursor() as cur:
@@ -125,6 +136,19 @@ def insert_article(conn):
             conn.commit()
             print("Article inserted")
         except psycopg2.Error as e:
+            if e.pgcode == psycopg2.errorcodes.UNIQUE_VIOLATION:
+                print(f"Article with code {code} already exists")
+            elif e.pgcode == psycopg2.errorcodes.NOT_NULL_VIOLATION:
+                if code is None:
+                    print(f"Error: code cannot be empty")
+                if name is None:
+                    print(f"Error: name cannot be empty")
+            elif e.pgcode == psycopg2.errorcodes.CHECK_VIOLATION:
+                print("Price must be positive")
+            elif e.pgcode == psycopg2.errorcodes.STRING_DATA_RIGHT_TRUNCATION:
+                print("Name length exceeds the limit")
+            else:
+                print(f"Error: {e.pgcode}: {e.pgerror}")
             conn.rollback()
     
 
