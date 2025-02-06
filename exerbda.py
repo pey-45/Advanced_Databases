@@ -10,6 +10,7 @@
 
 import psycopg2
 import psycopg2.extras
+import psycopg2.errorcodes
 import sys
 
 ## ------------------------------------------------------------
@@ -44,56 +45,87 @@ def disconnect_db(conn):
 
 ## ------------------------------------------------------------
 def create_table_article(conn):
+    """
+    Creates table 'article'
+    :param conn: open connection to the database
+    :return: None
+    """
+    
     statement = """
                 CREATE TABLE article (
-                    code INT PRIMARY KEY,
+                    code INT CONSTRAINT code_pkey PRIMARY KEY,
                     name VARCHAR(30) NOT NULL,
-                    price NUMERIC(5, 2) CHECK (price >= 0)
+                    price NUMERIC(5, 2) CONSTRAINT price_non_negative check (price > 0)
                 )
                 """
-    
-    try:
-        with conn.cursor() as cur:
+        
+    with conn.cursor() as cur:
+        try:
             cur.execute(statement)
-        conn.commit()
-        print("Table 'article' created")
-    except psycopg2.Error as e:
-        conn.rollback()
-        print_psycopg_error(e)
+            conn.commit()
+            print("Table 'article' created")
+        except psycopg2.Error as e:
+            if e.pgcode == psycopg2.errorcodes.DUPLICATE_TABLE:
+                print("Error: table 'article' already exists")
+            else:
+                print(f"Unknown error: {e.pgcode}: {e.pgerror}")
+            conn.rollback()
 
 
 ## ------------------------------------------------------------
 def delete_table_article(conn):
+    """
+    Creates table 'article'
+    :param conn: open connection to the database
+    :return: None
+    """
+    
     statement = """
                 DROP TABLE article
                 """
-    
-    try:
-        with conn.cursor() as cur:
+        
+    with conn.cursor() as cur:
+        try:
             cur.execute(statement)
-        conn.commit()
-        print("Table 'article' deleted")
-    except psycopg2.Error as e:
-        conn.rollback()
-        print_psycopg_error(e)
+            conn.commit()
+            print("Table 'article' deleted")
+        except psycopg2.Error as e:
+            if e.pgcode == psycopg2.errorcodes.UNDEFINED_TABLE:
+                print("Error: table 'article' does not exist")
+            else:
+                print(f"Undefined error: {e.pgcode}: {e.pgerror}")
+            conn.rollback()
+            
 
 
 ## ------------------------------------------------------------
-def insert_article(conn, code, name, price):
+def insert_article(conn):
+    """
+    Inserts a row on the table 'article' requesting the parameters by keyboard
+    :param conn: open connection to the database
+    :return: None
+    """
+    
+    code = input("Code: ")
+    code = None if code == "".strip() else int(code)
+    name = input("Name: ")
+    name = None if name == "".strip() else name
+    price = input("Price: ")
+    price = None if price == "".strip() else float(price)
+        
     statement = """
                 INSERT INTO article(code, name, price) 
                 values(%s, %s, %s)
                 """
     parameters = (code, name, price)
     
-    try:
-        with conn.cursor() as cur:
+    with conn.cursor() as cur:
+        try:
             cur.execute(statement, parameters)
-        conn.commit()
-        print("Article inserted")
-    except psycopg2.Error as e:
-        conn.rollback()
-        print_psycopg_error(e)
+            conn.commit()
+            print("Article inserted")
+        except psycopg2.Error as e:
+            conn.rollback()
     
 
 ## ------------------------------------------------------------
@@ -273,151 +305,7 @@ def increment_article_price(conn, code, increment):
         show_article_details(conn, code)
     except psycopg2.Error as e:
         conn.rollback()
-        print_psycopg_error(e)
-        
-
-def option1(conn):
-    create_table_article(conn)  
-    
-    
-def option2(conn):
-    delete_table_article(conn)
-    
-    
-def option3(conn):
-    print("Creating new article")
-            
-    try:
-        code = int(input("Code: "))
-    except ValueError: 
-        print("Invalid code")
-        return
-
-    name = input("Name: ").strip()
-    if not name:
-        print("Invalid name")
-        return
-        
-    price = input("Price (enter to omit): ")
-    if price:
-        try:
-            price = float(price)
-        except ValueError:
-            print("Invalid price")
-            return
-    else:
-        price = None
-        
-    insert_article(conn, code, name, price)
-    
-    
-def option4(conn):
-    code = input("Code to delete: ")
-    
-    try:
-        code = int(code)
-    except ValueError:
-        print("Invalid code")
-        return
-
-    delete_article(conn, code)
-
-
-def option5(conn):
-    text = input("Enter text to delete articles that contain it: ")
-    
-    if text.strip() == "":
-        print("You must enter at least one character")
-        return
-
-    delete_article_with_text(conn, text)
-
-
-def option6(conn):
-    show_article_count(conn)
-    
-
-def option7(conn):
-    code = input("Code from article to show: ")
-
-    try:
-        code = int(code)
-    except ValueError:
-        print("Invalid code")
-        return
-
-    show_article_details(conn, code)
-    
-
-def option8(conn):
-    show_all_articles(conn)
-
-
-def option9(conn):
-    price = input("Enter the minimum price: ")
-    
-    try:
-        price = float(price)
-    except ValueError:
-        print("Error: invalid price")
-        return
-        
-    show_articles_with_minimum_price(conn, price)
-
-
-def option10(conn):
-    code = input("Code from article to edit: ")
-
-    try:
-        code = int(code)
-    except ValueError:
-        print("Error: invalid code")
-        return
-        
-    print("Article details:")
-    show_article_details(conn, code, False)
-    
-    name = input("New name: ").strip()
-    if not name:
-        print("Enter a valid name")
-        
-    price = input("New price (enter to omit): ")
-    if price:
-        try:
-            price = float(price)
-        except ValueError:
-            print("Enter a valid price or omit it")
-            return
-    else:
-        price = None
-        
-    edit_article(conn, code, name, price)
-
-
-def option11(conn):
-    code = input("Code from article to increment price: ")
-
-    try:
-        code = int(code)
-    except ValueError:
-        print("Error: invalid code")
-        return
-    
-    print("Article details:")
-    show_article_details(conn, code, False)
-    
-    increment = input("Increment (%): ")
-    try: 
-        increment = float(increment)
-    except ValueError:
-        print("Enter a valid percentage")
-        return
-    
-    increment_article_price(conn, code, increment)
-    
-    
-        
-        
+        print_psycopg_error(e)  
 
 
 ## ------------------------------------------------------------
@@ -441,20 +329,117 @@ def menu(conn):
                 
     while True:
         print(MENU_TEXT)
+        
         key = input("Option: ")
-        if key == "q": break
-        elif key == "1": option1(conn)   
-        elif key == "2": option2(conn)
-        elif key == "3": option3(conn)
-        elif key == "4": option4(conn)
-        elif key == "5": option5(conn)
-        elif key == "6": option6(conn)
-        elif key == "7": option7(conn)
-        elif key == "8": option8(conn)
-        elif key == "9": option9(conn)
-        elif key == "10": option10(conn)
-        elif key == "11": option11(conn)
+        
+        if key == "q": 
+            break
+        
+        elif key == "1": 
+            create_table_article(conn)    
             
+        elif key == "2":
+            delete_table_article(conn)
+            
+        elif key == "3": 
+            insert_article(conn)
+        
+        elif key == "4": 
+            code = input("Code to delete: ")
+    
+            try:
+                code = int(code)
+            except ValueError:
+                print("Invalid code")
+                return
+
+            delete_article(conn, code)
+            
+        elif key == "5": 
+            text = input("Enter text to delete articles that contain it: ")
+    
+            if text.strip() == "":
+                print("You must enter at least one character")
+                return
+
+            delete_article_with_text(conn, text)
+            
+        elif key == "6": 
+            show_article_count(conn)
+            
+        elif key == "7": 
+            code = input("Code from article to show: ")
+
+            try:
+                code = int(code)
+            except ValueError:
+                print("Invalid code")
+                return
+
+            show_article_details(conn, code)
+            
+        elif key == "8": 
+            show_all_articles(conn)
+            
+        elif key == "9": 
+            price = input("Enter the minimum price: ")
+    
+            try:
+                price = float(price)
+            except ValueError:
+                print("Error: invalid price")
+                return
+        
+            show_articles_with_minimum_price(conn, price)
+            
+        elif key == "10": 
+            code = input("Code from article to edit: ")
+
+            try:
+                code = int(code)
+            except ValueError:
+                print("Error: invalid code")
+                return
+                
+            print("Article details:")
+            show_article_details(conn, code, False)
+            
+            name = input("New name: ").strip()
+            if not name:
+                print("Enter a valid name")
+                
+            price = input("New price (enter to omit): ")
+            if price:
+                try:
+                    price = float(price)
+                except ValueError:
+                    print("Enter a valid price or omit it")
+                    return
+            else:
+                price = None
+                
+            edit_article(conn, code, name, price)
+            
+        elif key == "11": 
+            code = input("Code from article to increment price: ")
+
+            try:
+                code = int(code)
+            except ValueError:
+                print("Error: invalid code")
+                return
+            
+            print("Article details:")
+            show_article_details(conn, code, False)
+            
+            increment = input("Increment (%): ")
+            try: 
+                increment = float(increment)
+            except ValueError:
+                print("Enter a valid percentage")
+                return
+            
+            increment_article_price(conn, code, increment)
             
             
 ## ------------------------------------------------------------
